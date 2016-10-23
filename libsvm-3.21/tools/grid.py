@@ -262,6 +262,7 @@ class Worker(Thread):
 					c = 2.0**cexp
 				if gexp != None:
 					g = 2.0**gexp
+				print("c: "+ str(c) + ", g: " + str(g))
 				rate = self.run_one(c,g)
 				if rate is None: raise RuntimeError('get no rate')
 			except:
@@ -289,7 +290,9 @@ class Worker(Thread):
 class LocalWorker(Worker):
 	def run_one(self,c,g):
 		cmdline = self.get_cmd(c,g)
+		#print("cmdline: "+cmdline)
 		result = Popen(cmdline,shell=True,stdout=PIPE,stderr=PIPE,stdin=PIPE).stdout
+		#print("o: "+o + ", e: "+e)	
 		for line in result.readlines():
 			if str(line).find('Cross') != -1:
 				return float(line.split()[-1][0:-1])

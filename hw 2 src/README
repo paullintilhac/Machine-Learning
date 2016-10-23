@@ -1,7 +1,0 @@
-To see how I did this assignment:
-First, open the r file to see how I downloaded, formatted, and 
-partitioned the data. 
-
-Then, to scale it, I typed:
-../libsvm*/svm-scale -r range training >training.scale
-../libsvm*/svm-scale -r range testing >testing.scale

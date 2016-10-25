@@ -100,30 +100,38 @@ class GridOption:
 			raise ValueError('-log2c and -log2g should not be null simultaneously')
 		if self.gnuplot_pathname and not os.path.exists(self.gnuplot_pathname):
 			sys.stderr.write('gnuplot executable not found\n')
-			self.gnuplot_pathname = None
+			self.gnuplot_pathname = "C:\Program Files (x86)\gnuplot.exe"
 
 def redraw(db,best_param,gnuplot,options,tofile=False):
-	if len(db) == 0: return
+	if len(db) == 0:
+		print("db length of 0")
+		return
 	begin_level = round(max(x[2] for x in db)) - 3
 	step_size = 0.5
 
 	best_log2c,best_log2g,best_rate = best_param
+	print("inside redraw -- tofile: " + str(tofile))
 
 	# if newly obtained c, g, or cv values are the same,
 	# then stop redrawing the contour.
-	if all(x[0] == db[0][0]  for x in db): return
-	if all(x[1] == db[0][1]  for x in db): return
-	if all(x[2] == db[0][2]  for x in db): return
-
+	if (False):
+		if all(x[0] == db[0][0]  for x in db): return
+		if all(x[1] == db[0][1]  for x in db): return
+		if all(x[2] == db[0][2]  for x in db): return
+	
 	if tofile:
+		print("writing gnuplot to file")
 		gnuplot.write(b"set term png transparent small linewidth 2 medium enhanced\n")
 		gnuplot.write("set output \"{0}\"\n".format(options.png_pathname.replace('\\','\\\\')).encode())
 		#gnuplot.write(b"set term postscript color solid\n")
 		#gnuplot.write("set output \"{0}.ps\"\n".format(options.dataset_title).encode().encode())
 	elif sys.platform == 'win32':
+		print("weird")
 		gnuplot.write(b"set term windows\n")
 	else:
+		print("weird2")
 		gnuplot.write( b"set term x11\n")
+	print("writing to gnuplot file again")
 	gnuplot.write(b"set xlabel \"log2(C)\"\n")
 	gnuplot.write(b"set ylabel \"log2(gamma)\"\n")
 	gnuplot.write("set xrange [{0}:{1}]\n".format(options.c_begin,options.c_end).encode())
@@ -144,13 +152,14 @@ def redraw(db,best_param,gnuplot,options,tofile=False):
 	gnuplot.write(b"splot \"-\" with lines\n")
 	
 	db.sort(key = lambda x:(x[0], -x[1]))
-
+	print("hurro?")
 	prevc = db[0][0]
 	for line in db:
 		if prevc != line[0]:
 			gnuplot.write(b"\n")
 			prevc = line[0]
 		gnuplot.write("{0[0]} {0[1]} {0[2]}\n".format(line).encode())
+	print("hurro hurro?")
 	gnuplot.write(b"e\n")
 	gnuplot.write(b"\n") # force gnuplot back to prompt when term set failure
 	gnuplot.flush()
@@ -186,12 +195,12 @@ def calculate_jobs(options):
 	
 	c_seq = permute_sequence(range_f(options.c_begin,options.c_end,options.c_step))
 	g_seq = permute_sequence(range_f(options.g_begin,options.g_end,options.g_step))
-
+	print("g seq: "+str(g_seq) )
 	if not options.grid_with_c:
 		c_seq = [None]
 	if not options.grid_with_g:
 		g_seq = [None] 
-	
+	#g_seq = [0.017544]
 	nr_c = float(len(c_seq))
 	nr_g = float(len(g_seq))
 	i, j = 0, 0
@@ -365,13 +374,19 @@ def find_parameters(dataset_pathname, options=''):
 	options = GridOption(dataset_pathname, options);
 
 	if options.gnuplot_pathname:
+		##options.gnuplot_pathname.replace(" ","\ ")
+		print("gnuplot pathname exists: "+options.gnuplot_pathname)
+
 		gnuplot = Popen(options.gnuplot_pathname,stdin = PIPE,stdout=PIPE,stderr=PIPE).stdin
+		print("gnuplot: "+str(gnuplot))
 	else:
+		print("gnuplot pathname doesn't exist")
 		gnuplot = None
 		
 	# put jobs in queue
 
 	jobs,resumed_jobs = calculate_jobs(options)
+	print("jobs: "+ str(jobs))
 	job_queue = Queue(0)
 	result_queue = Queue(0)
 
@@ -434,20 +449,29 @@ def find_parameters(dataset_pathname, options=''):
 	for (c,g) in resumed_jobs:
 		rate = resumed_jobs[(c,g)]
 		best_c,best_g,best_rate = update_param(c,g,rate,best_c,best_g,best_rate,'resumed',True)
-
+	print("before loop")
 	for line in jobs:
+		#g=0.017544
+		print("line: "+str(line))
 		for (c,g) in line:
+			print("c: "+ str(c)+", g: "+str(g))
 			while (c,g) not in done_jobs:
+				print("iterating over done jobs")
 				(worker,c1,g1,rate1) = result_queue.get()
 				done_jobs[(c1,g1)] = rate1
 				if (c1,g1) not in resumed_jobs:
 					best_c,best_g,best_rate = update_param(c1,g1,rate1,best_c,best_g,best_rate,worker,False)
+			print("gnuplot: "+str(gnuplot)+", options.grid_with_c: "+str(options.grid_with_c)+", options.grid_with_g: "+str(options.grid_with_g))
 			db.append((c,g,done_jobs[(c,g)]))
-		if gnuplot and options.grid_with_c and options.grid_with_g:
+		if gnuplot and options.grid_with_c:
+			print("redrawing")
 			redraw(db,[best_c, best_g, best_rate],gnuplot,options)
 			redraw(db,[best_c, best_g, best_rate],gnuplot,options,True)
+		else:
+			print("not redrawing")
 
-
+	print("after loop -- options.out_pathname: "+options.out_pathname)
+	print("result_file: "+str(result_file))
 	if options.out_pathname:
 		result_file.close()
 	job_queue.put((WorkerStopToken,None))

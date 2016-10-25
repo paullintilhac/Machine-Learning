@@ -4,6 +4,7 @@
 #include <ctype.h>
 #include <errno.h>
 #include "svm.h"
+#include <math.h>
 #define Malloc(type,n) (type *)malloc((n)*sizeof(type))
 
 void print_null(const char *s) {}
@@ -61,7 +62,7 @@ int nr_fold;
 
 static char *line = NULL;
 static int max_line_len;
-
+extern int errno ;
 static char* readline(FILE *input)
 {
 	int len;
@@ -95,10 +96,17 @@ int main(int argc, char **argv)
 		fprintf(stderr,"ERROR: %s\n",error_msg);
 		exit(1);
 	}
-
 	if(cross_validation)
 	{
-		do_cross_validation();
+	for (int i=-10; i<=10;i++){
+		for (int j=1;j<=4;j++){
+
+			param.C = pow(2,i);
+			param.degree = j;
+			printf("C: %f, d: %d",param.C,param.degree);
+			do_cross_validation();
+			}
+		}
 	}
 	else
 	{
@@ -123,6 +131,8 @@ void do_cross_validation()
 {
 	int i;
 	int total_correct = 0;
+	float avgError=0;
+	float sdError=0;
 	double total_error = 0;
 	double sumv = 0, sumy = 0, sumvv = 0, sumyy = 0, sumvy = 0;
 	double *target = Malloc(double,prob.l);
@@ -151,8 +161,37 @@ void do_cross_validation()
 	else
 	{
 		for(i=0;i<prob.l;i++)
-			if(target[i] == prob.y[i])
-				++total_correct;
+			if(target[i] == prob.y[i]){
+				//printf("i: %d, target: %a, prob.y[i]: %a \n",i,target[i],prob.y[i]);
+				++total_correct;}
+
+		avgError = 1-(float)total_correct/(float)prob.l;
+		printf("extern int errno ;avg error: %f\n",avgError);
+
+		for (i=0;i<prob.l;i++){
+			if (target[i] != prob.y[i]){
+				sdError+=((float)(1-avgError))*((float)(1-avgError));
+			}
+		}
+		sdError /= prob.l;
+		printf("sd error: %f\n",sdError);
+		sdError = 100*sqrt(10*sdError/prob.l);
+		printf("sd error: %f\n",sdError);
+		avgError *=100;
+		FILE *pFile = fopen("c://users/paul/Machine Learning/results.csv", "a");
+		int errnum;
+	   if (pFile == NULL) {
+	   
+	      errnum = errno;
+	      fprintf(stderr, "Value of errno: %d\n", errno);
+	      perror("Error printed by perror");
+	      fprintf(stderr, "Error opening file: %s\n", strerror( errnum ));
+	   }
+	   else {
+	   	  fprintf(pFile,"%f, %d, %f, %f \r\n",param.C,param.degree, avgError,sdError);
+	      fclose (pFile);
+	   }
+
 		printf("Cross Validation Accuracy = %g%%\n",100.0*total_correct/prob.l);
 	}
 	free(target);
@@ -356,6 +395,7 @@ void read_problem(const char *filename)
 		if(inst_max_index > max_index)
 			max_index = inst_max_index;
 		x_space[j++].index = -1;
+
 	}
 
 	if(param.gamma == 0 && max_index > 0)

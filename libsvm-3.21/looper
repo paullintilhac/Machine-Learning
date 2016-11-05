@@ -1,0 +1,11 @@
+#!/bin/bash
+
+#for i in -2 0 2 4 6 8 10 12 14 16; do
+#for i in -1 1; do
+    #for j in 1 2 3 4; do
+    #for j in 1 2; do
+     echo $j
+    ./svm-train -h 0 -t 1 -v 4 ../hw_2*/training.scale
+    #done
+    ##
+#done

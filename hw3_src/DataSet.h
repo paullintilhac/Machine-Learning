@@ -4,6 +4,7 @@ public:
 	vector<int> responses;
 	vector<vector<float>> predictors;
 	DataSet(vector<vector<float>> rawData){
+		cout<<"rawData.size(): "<<rawData.size()<<", rawData[i].size(): "<<rawData[i].size()<<endl;
 		for (int i=0;i<rawData.size();i++){
 			//cout<<"rawData[i][0]: "<<rawData[i][0]<<endl;
 			responses.push_back((int)rawData[i][0]);
@@ -13,6 +14,7 @@ public:
 			}
 			predictors.push_back(thisLine);
 		}
+
 	}
 	
    	struct comp
@@ -27,6 +29,7 @@ public:
 		int ncol = d.predictors[0].size();
 		float sum = 0;
 		int responses[nrow];
+
 		//for (int i=0;i<nrow;i++){
 		//	sum+= dist[i];
 		//	responses[i] = d.responses[i];
@@ -38,7 +41,6 @@ public:
 		float bestAccuracies[nrow];
 		float bestThresholds[nrow];
 		int bestSigns[nrow];
-		cout<<"hello"<<endl;
 		for (int i=0;i<ncol;i++){
 			vector<pair<float,float>> responsePredictor;
 			for (int j=0;j<nrow;j++){

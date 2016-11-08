@@ -25,12 +25,17 @@ int main(int argc, char* argv[]){
 	for (int i=0;i<nrows;i++){
 		dist[i]=(float)1/nrows;
 	}
-	int T = 10;
 	float g[nrows];
 	float classifier[nrows];
+	int T;
+
+	for (int k=1;k<5;k++){
+		T = pow(10,k);
+
 	for (int i=0;i<T;i++){
+		training.createFolds(5);
 		EvalResult er = training.getStumps(training,dist);
-		cout<<"best ind: "<<er.index<<", er.accuracy: "<<er.accuracy<<", er.threshold: "<<er.threshold<<", er.sign: "<<er.sign<<endl;
+		//cout<<"best ind: "<<er.index<<", er.accuracy: "<<er.accuracy<<", er.threshold: "<<er.threshold<<", er.sign: "<<er.sign<<endl;
 		
 		float a = .5*log((er.accuracy)/(1-er.accuracy));
 		float Z = 2*pow((1-er.accuracy)*(er.accuracy),.5);
@@ -54,5 +59,5 @@ int main(int argc, char* argv[]){
 		} 
 	}
 
-
+	}
 }

@@ -3,6 +3,9 @@ class DataSet{
 public:
 	vector<int> responses;
 	vector<vector<float>> predictors;
+	vector<int> shuffledInd;
+	vector<vector<int>> trainingInd;
+	vector<vector<int>> testingInd;
 	DataSet(vector<vector<float>> rawData){
 		for (int i=0;i<rawData.size();i++){
 			//cout<<"rawData[i][0]: "<<rawData[i][0]<<endl;
@@ -81,7 +84,7 @@ public:
 					bestSign = sign;
 				}
 			}
-			cout<<"bestAccuracy: "<<bestAccuracy<<", bestThreshold: "<<bestThreshold<<", bestSign: "<<bestSign<<endl;
+			//cout<<"bestAccuracy: "<<bestAccuracy<<", bestThreshold: "<<bestThreshold<<", bestSign: "<<bestSign<<endl;
 
 			
 			if (abs(bestAccuracy-.5)>bestTotalAccuracy-.5){
@@ -113,5 +116,49 @@ public:
 			return(wMean);
 		}
 
-	
+		void createFolds(int k){
+			int nrows = this->responses.size();
+			cout<<"nrows: "<<nrows<<endl;
+			for (int i=0;i<nrows;i++){
+				this->shuffledInd.push_back(i);
+			}
+
+			random_shuffle(this->shuffledInd.begin(),this->shuffledInd.end());
+
+			int foldSize = nrows/k;
+			cout<<"fold size: "<<foldSize<<endl;
+			vector<int> thisFold;
+			for (int i=0;i<nrows;i++){
+				int foldIndex = i/foldSize;
+				//cout<<"shuffledInd[i]: "<<shuffledInd[i]<<endl;
+				if (i%foldSize==0&&i>0){
+					cout<<"thisFold.size(): "<<thisFold.size()<<endl;
+					sort(thisFold.begin(),thisFold.end());
+					testingInd.push_back(thisFold);						
+					//this->trainingInd[fodlIndex].push_back
+					thisFold.clear();
+				}
+				thisFold.push_back(shuffledInd[i]);	
+				//cout<<"shuffled ind: "<<this->shuffledInd[i]<<endl;
+			}
+			vector<int> thisRemainder;
+
+			for (int i=0;i<testingInd.size();i++){
+				int cursor =0;
+				cout<<"size at top: "<<thisRemainder.size()<<", shuffled ind size: "<<shuffledInd.size()<<endl;
+				for (int j=0;j<shuffledInd.size();j++){
+					if (j!=thisFold[cursor]){
+						thisRemainder.push_back(j);
+					} else {
+						cursor++;
+					}
+				}
+				cout<<"training size: "<<thisRemainder.size()<<endl;
+				trainingInd.push_back(thisRemainder);
+				thisRemainder.clear();
+			}
+			cout<<"clearing shuffledInd"<<endl;
+		shuffledInd.clear();
+		}
+
 };

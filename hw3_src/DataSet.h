@@ -1,4 +1,5 @@
 #include "EvalResult.h"
+#include "XY.h"
 class DataSet{
 public:
 	vector<int> responses;
@@ -6,159 +7,304 @@ public:
 	vector<int> shuffledInd;
 	vector<vector<int>> trainingInd;
 	vector<vector<int>> testingInd;
+	
 	DataSet(vector<vector<float>> rawData){
 		for (int i=0;i<rawData.size();i++){
 			//cout<<"rawData[i][0]: "<<rawData[i][0]<<endl;
-			responses.push_back((int)rawData[i][0]);
+			int newData = (int)rawData[i][0];
+			if (newData==0)
+				newData = -1;
+			//cout<<"newData: "<<newData<<endl;
+			responses.push_back(newData);
 			vector<float> thisLine;
 			for (int j=0;j<rawData[i].size()-1;j++){
 				thisLine.push_back(rawData[i][j+1]);
 			}
 			predictors.push_back(thisLine);
 		}
-
 	};
-	
+
+	DataSet(vector<int> indices, DataSet* parent){
+		for (int i=0;i<indices.size();i++){
+			//cout<<"predictor size during construction: "<<parent.predictors[indices[i]].size()<<endl;
+			responses.push_back((int)parent->responses[indices[i]]);
+			predictors.push_back(parent->predictors[indices[i]]);
+		}
+		//cout<<"total size of predictors: "<<parent.predictors.size()<<endl;
+	};
+
    	struct comp
 	{
-	    inline bool operator() (const pair<float,float>& l, const pair<float,float>& r)
+	    inline bool operator() (const XY& l, const XY& r)
 	    {
-	        return (l.second < r.second);
+	        return (l.threshold < r.threshold);
+	    }
+	};
+	struct comp2
+	{
+	    inline bool operator() (const XY& l, const XY& r)
+	    {
+	        return (l.index< r.index);
 	    }
 	};
 	
-	EvalResult getStumps(DataSet d,float* dist){
-		int nrow = d.responses.size();
-		int ncol = d.predictors[0].size();
-		float sum = 0;
-		int responses[nrow];
 
-		//for (int i=0;i<nrow;i++){
-		//	sum+= dist[i];
-		//	responses[i] = d.responses[i];
-		//}
-		/*if (sum!=1){
-			cout<<"probabilities do not sum to 1!"<<endl;
+	vector<EvalResult> trainBoost( int T){
+		int nrowsTraining = responses.size();
+		vector<EvalResult> model;
+		double dist[nrowsTraining];
+			//cout<<"nrows: "<<nrows<<endl;
+		for (int i=0;i<nrowsTraining;i++){
+			//cout<<"response: "<<responses[i]<<endl;
+			dist[i]=(float)1/nrowsTraining;
+		}
+		for (int i=0;i<T;i++){ //iteratre over base classifiers
+			cout<<"iteration: "<<i<<endl;
+			EvalResult er = this->getStumps(dist);
+			cout<<"best ind: "<<er.index<<", best row ind: "<<er.rowInd<<", er.accuracy: "<<(.5+abs(.5-er.accuracy))<<", er.threshold: "<<er.threshold<<", er.sign: "<<er.sign<<endl;
+			double a = .5*log((er.accuracy)/(1-er.accuracy));
+			double Z = 2*pow((1-er.accuracy)*(er.accuracy),(double).5);
+			for (int j=0;j<nrowsTraining;j++){
+				//cout<<"a: "<<a<<", response: "<<responses[j]<<", hypothesis: "<<(er.hypothesisData[j].prediction*er.sign)<<endl;
+				dist[j]=dist[j]*exp(-a*responses[j]*er.hypothesisData[j].prediction*er.sign);
+			}
+			model.push_back(er);
+		}
+		return(model);
+	};
+
+	int* testBoost(vector<EvalResult> model){
+		int nrowsTesting = responses.size();
+		//test
+		int g[nrowsTesting];
+		for (int i=0;i<model.size();i++){
+			double a = .5*log((model[i].accuracy)/(1-model[i].accuracy));
+			for (int j=0; j<nrowsTesting;j++){
+				int thisH;				
+				thisH = (2*(predictors[j][model[i].index]<=model[i].threshold)-1)*model[i].sign;
+				g[j]+=thisH*a;
+			}
+		}
+		for (int i=0;i<nrowsTesting;i++){
+			if (g[i]>0)
+				g[i]=1;
+			else
+				g[i]=-1;
+		}
+		return(g);
+	};
+
+	EvalResult getStumps(double* dist){
+		int nrow = responses.size();
+		int ncol = predictors[0].size();
+		double sum = 0;
+		//cout<<"best index List size: "<<d->bestIndexList.size()<<endl;
+		//cout<<"nrow in training: "<<nrow<<endl;
+		for (int i=0;i<nrow;i++){
+			//cout<<"dist: "<<dist[i]<<endl;
+			sum+= dist[i];
+		}
+		if (sum!=1){
+			cout<<"probabilities do not sum to 1! "<<sum<<endl;
 			//exit(1);
-		}*/
+		}
 		int bestTotalIndex;
-		float bestTotalAccuracy=0;
+		double bestTotalAccuracy=.5;
 		float bestTotalThreshold=0;
 		int bestTotalSign=0;
+		int bestTotalRowInd=0;
 		int count=0;
+		vector<XY> totalBestResponsePredictor;
+		vector<XY> bestResponsePredictor;
+		vector<XY> responsePredictor;
 		for (int i=0;i<ncol;i++){
-			vector<pair<int,float>> responsePredictor;
+			//cout<<"hello0"<<endl;
+
+			bool repeatCol=false;
+			//cout<<"bestIndexList: ";
+			
 			for (int j=0;j<nrow;j++){
-				responsePredictor.push_back(make_pair(d.responses[j],d.predictors[i][j]));
+				XY xy(responses[j],predictors[j][i],j,-1,dist[j]);
+				responsePredictor.push_back(xy);
 			}
+
 			//cout<<"column: "<<i<<", first element: "<<responsePredictor[0].second<<endl;
 
 			sort(responsePredictor.begin(),responsePredictor.end(),comp());
-			float bestThreshold = responsePredictor[0].second;
-			float accuracy =weightedMean(responsePredictor,dist,0);
-			float bestAccuracy = accuracy;
+			
+			float bestThreshold = responsePredictor[0].threshold;
+			//cout<<"hello1"<<endl;
+			double accuracy =0;
+			for (int j=0;j<nrow;j++){
+				//cout<<"accuracy: "<<accuracy<<", response: "<<responsePredictor[j].response<<", prediction: "<<responsePredictor[j].prediction<<endl; 
+				if (responsePredictor[j].response==-1)
+					accuracy+=responsePredictor[j].dist;
+			}
+			//cout<<"initial accuracy: "<<accuracy<<endl;
+			double bestAccuracy = accuracy;
 			int bestSign =-1;
+			int bestRowInd=0;
 			if (bestAccuracy>.5)
 				bestSign =1;
-			//cout<<"start accuracy: "<<accuracy<<endl;
+			
 			for (int j=0;j<nrow;j++){
-				//this is an efficient way of calculating the accuracy 
-				//for every threshold in O(n) time instead of O(n^2) time
 
-				if (responsePredictor[j].first==1) 
-				accuracy+=dist[j];
-				else{
-				accuracy-=dist[j];
+				responsePredictor[j].prediction = 1;
+				//this is an efficient way of calculating the accuracy 
+				//for each threshold in O(nrow) time instead of O(nrow^2) time
+				//cout<<"dist: "<<responsePredictor[j].dist<<endl;
+				if (responsePredictor[j].response==1){
+				accuracy+=responsePredictor[j].dist;
 				}
-				//float accuracy2 = weightedMean(responsePredictor,dist,j+1);
+				else{
+				accuracy-=responsePredictor[j].dist;
+				}
+				double accuracy2 = 0;
+				for (int k=0;k<nrow;k++){
+					//cout<<"accuracy: "<<accuracy2<<", response: "<<responsePredictor[k].response<<", prediction: "<<responsePredictor[k].prediction<<endl; 
+
+					if (responsePredictor[k].response ==responsePredictor[k].prediction)
+						accuracy2+=responsePredictor[k].dist;
+				}
+				
+				//cout<<"accuracy: "<<accuracy<<", accuracy2: "<<accuracy2<<endl;
 
 				int sign=-1;
 				if (accuracy>.5)
 					sign = 1;
-				if (abs(accuracy-.5)>abs(bestAccuracy-.5)){
+				if (j<nrow-1){
+					if (responsePredictor[j].threshold==responsePredictor[j+1].threshold){
+						continue;
+					}
+				}
+				if (abs(accuracy-.5)>=abs(bestAccuracy-.5)){
 					//cout<<"better accuracy"<<endl;
 					bestAccuracy = accuracy;
-					bestThreshold = responsePredictor[j].second;
-					if (j==nrow)
-						bestThreshold+=.1;
+					bestThreshold = responsePredictor[j].threshold;
 					bestSign = sign;
+					bestRowInd = j;
+					bestResponsePredictor = responsePredictor;
 				}
 			}
-			//cout<<"bestAccuracy: "<<bestAccuracy<<", bestThreshold: "<<bestThreshold<<", bestSign: "<<bestSign<<endl;
+			//cout<<"bestAccuracy: "<<(.5+abs(bestAccuracy-.5))<<", best total accuracy: "<<(.5+abs(.5-bestTotalAccuracy))<<", bestThreshold: "<<bestThreshold<<", bestSign: "<<bestSign<<endl;
 
 			
-			if (abs(bestAccuracy-.5)>bestTotalAccuracy-.5){
+			if (abs(bestAccuracy-.5)>=abs(bestTotalAccuracy-.5)){
+				//cout<<"found new best: "<<i<<endl;
 				bestTotalAccuracy=bestAccuracy;
 				bestTotalThreshold=bestThreshold;
 				bestTotalSign = bestSign;
-				bestTotalIndex = bestTotalIndex;
+				bestTotalIndex = i;
+				totalBestResponsePredictor = bestResponsePredictor;
+				bestTotalRowInd=bestRowInd;
 			}
+			responsePredictor.clear();
+
+
 		}
 		if (bestTotalSign<0){
 			bestTotalAccuracy=1-bestTotalAccuracy;
 		}
-		EvalResult result(bestTotalIndex,bestTotalAccuracy,bestTotalThreshold,bestTotalSign);
+		
+
+		sort(totalBestResponsePredictor.begin(),totalBestResponsePredictor.end(),comp2());
+		
+		//double acc = 0;
+		//for (int i=0;i<nrow;i++){
+		//	cout<<"index after sorting: "<<totalBestResponsePredictor[i].index<<endl;
+		//	if (totalBestResponsePredictor[i].response==totalBestResponsePredictor[i].prediction)
+		//		acc++;
+		//}
+		//acc/=nrow;
+		//cout<<"accuracy in stubs: "<<acc<<endl;
+
+
+		//cout<<"totalBestIndex: "<<bestTotalIndex<<endl;
+		EvalResult result(bestTotalIndex,
+			bestTotalAccuracy,
+			bestTotalThreshold,
+			bestTotalSign,
+			totalBestResponsePredictor,
+			bestTotalRowInd);
 		return(result);
 		};
 
-		float weightedMean(vector<pair<int,float>> inVec,float* w,int index){
-			float wMean = 0;
-			for (int i=0;i<inVec.size();++i){
-				int correct;
-				//cout<<"i<index? "<<(i<index)<<", response ==1? "<<(inVec[i].first==1)<<", w[i]: "<<w[i]<<endl;
-				if ((i<index&&inVec[i].first==1)||(i>=index&&inVec[i].first==0)){
-					correct =1;
-				} else{
-					correct = 0;
-				}
-				wMean+=correct*w[i];
-			}
-			return(wMean);
+	
+	void createFolds(int k){
+		int nrows = this->responses.size();
+		//cout<<"nrows: "<<nrows<<endl;
+		for (int i=0;i<nrows;i++){
+			this->shuffledInd.push_back(i);
 		}
 
-		void createFolds(int k){
-			int nrows = this->responses.size();
-			cout<<"nrows: "<<nrows<<endl;
-			for (int i=0;i<nrows;i++){
-				this->shuffledInd.push_back(i);
+		random_shuffle(this->shuffledInd.begin(),this->shuffledInd.end());
+
+		int foldSize = nrows/k;
+		//cout<<"fold size: "<<foldSize<<endl;
+		vector<int> thisFold;
+		for (int i=0;i<nrows;i++){
+			int foldIndex = i/foldSize;
+			//cout<<"shuffledInd[i]: "<<shuffledInd[i]<<endl;
+			if (i%foldSize==0&&i>0){
+				//cout<<"thisFold.size(): "<<thisFold.size()<<endl;
+				sort(thisFold.begin(),thisFold.end());
+				testingInd.push_back(thisFold);	
+				//cout<<"new fold: "<<foldIndex<<endl;					
+				//this->trainingInd[fodlIndex].push_back
+				thisFold.clear();
 			}
+			//cout<<shuffledInd[i]<<" "<<endl;
+			thisFold.push_back(shuffledInd[i]);	
+			//cout<<"shuffled ind: "<<this->shuffledInd[i]<<endl;
+		}
+		vector<int> thisRemainder;
 
-			random_shuffle(this->shuffledInd.begin(),this->shuffledInd.end());
-
-			int foldSize = nrows/k;
-			cout<<"fold size: "<<foldSize<<endl;
-			vector<int> thisFold;
-			for (int i=0;i<nrows;i++){
-				int foldIndex = i/foldSize;
-				//cout<<"shuffledInd[i]: "<<shuffledInd[i]<<endl;
-				if (i%foldSize==0&&i>0){
-					cout<<"thisFold.size(): "<<thisFold.size()<<endl;
-					sort(thisFold.begin(),thisFold.end());
-					testingInd.push_back(thisFold);						
-					//this->trainingInd[fodlIndex].push_back
-					thisFold.clear();
+		for (int i=0;i<testingInd.size();i++){
+			//cout<<"training fold "<<i<<", testing size: "<<testingInd[i].size()<<endl;
+			for (int j=0;j<shuffledInd.size();j++){
+				bool contained = false;
+				for (int k=0;k<testingInd[i].size();k++){
+					if (j==testingInd[i][k])
+					contained = true;
 				}
-				thisFold.push_back(shuffledInd[i]);	
-				//cout<<"shuffled ind: "<<this->shuffledInd[i]<<endl;
-			}
-			vector<int> thisRemainder;
-
-			for (int i=0;i<testingInd.size();i++){
-				int cursor =0;
-				cout<<"size at top: "<<thisRemainder.size()<<", shuffled ind size: "<<shuffledInd.size()<<endl;
-				for (int j=0;j<shuffledInd.size();j++){
-					if (j!=thisFold[cursor]){
-						thisRemainder.push_back(j);
-					} else {
-						cursor++;
-					}
+				if (!contained){
+					thisRemainder.push_back(j);
+					//cout<<j<<" "<<endl;
 				}
-				cout<<"training size: "<<thisRemainder.size()<<endl;
-				trainingInd.push_back(thisRemainder);
-				thisRemainder.clear();
 			}
-			cout<<"clearing shuffledInd"<<endl;
+			trainingInd.push_back(thisRemainder);
+			//cout<<"training size: "<<thisRemainder.size()<<", testing size: "<<testingInd[i].size()<<endl;
+			thisRemainder.clear();
+		}
 		shuffledInd.clear();
+
+	};
+
+	int* crossValidate(int T, int nFolds){
+		int nrows = responses.size();
+		double gTest[nrows];
+		for (int i=0;i<nrows;i++){
+			gTest[i]=-1;
+		}
+		this->createFolds(nFolds);
+		for (int l=0;l<nFolds;l++){ //do cross-validation
+			cout<<"fold: "<<l<<endl;
+			//cout<<"training ind size: "<<training.trainingInd[l].size()<<endl;
+			//cout<<"training.size: "<<training.responses.size()<<endl;
+			DataSet trainingSet(trainingInd[l],this);
+			DataSet testingSet(testingInd[l],this);
+			int nrowsTraining = trainingSet.responses.size();
+			
+			double g[nrowsTraining];
+						
+			vector<EvalResult> model =trainingSet.trainBoost(T);
+			
+			int* gTemp =testingSet.testBoost(model);
+			for (int i=0;i<testingInd[l].size();i++){
+				gTest[testingInd[l][i]] = gTemp[i];
+			}
+
 		}
 
+		};
 };

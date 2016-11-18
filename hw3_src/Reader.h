@@ -11,8 +11,8 @@ public:
 	Reader(string f1,string f2){
 		this->testingFileName = f2;
 		this->trainingFileName = f1;
-		trainingData = read("../training.csv");
-		testingData = read("../testing.csv");
+		trainingData = read(f1);
+		testingData = read(f2);
 	}
 
 vector<vector<float>> read(string fileName){

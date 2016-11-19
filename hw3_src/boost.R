@@ -55,9 +55,12 @@ testBoost = function(testDat,model){
       thresh = model$thresholds[[j]]
       maxInd = model$indices[[j]]
       Sgn = model$signs[[j]]
-     
+      
+      
       hTest =(2*(testDat[,maxInd+1,with=F]<=thresh)-1) * Sgn
-     
+      accuracy = mean(hTest = testDat$response)
+      a=.5*log((accuracy)/(1-accuracy))
+      
       gTest =gTest+hTest*a
       gTestBin = sign(gTest)
     }

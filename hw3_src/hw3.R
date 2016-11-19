@@ -16,7 +16,7 @@ dat[response==0]$response = -1
 
 results =data.table(matrix(0,nrow=0,ncol=3))
 setnames(results,c("T","cv_accuracy","test_accuracy"))
-for (i in 1:6){
+for (i in 1:4){
   t = 4^i
   print(paste0("t: ",i))
   

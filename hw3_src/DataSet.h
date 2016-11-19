@@ -59,39 +59,57 @@ public:
 			dist[i]=(float)1/nrowsTraining;
 		}
 		for (int i=0;i<T;i++){ //iteratre over base classifiers
-			cout<<"iteration: "<<i<<endl;
+			//cout<<"iteration: "<<i<<endl;
 			EvalResult er = this->getStumps(dist);
-			cout<<"best ind: "<<er.index<<", best row ind: "<<er.rowInd<<", er.accuracy: "<<(.5+abs(.5-er.accuracy))<<", er.threshold: "<<er.threshold<<", er.sign: "<<er.sign<<endl;
+			//cout<<"best ind: "<<er.index<<", best row ind: "<<er.rowInd<<", er.accuracy: "<<(.5+abs(.5-er.accuracy))<<", er.threshold: "<<er.threshold<<", er.sign: "<<er.sign<<endl;
 			double a = .5*log((er.accuracy)/(1-er.accuracy));
 			double Z = 2*pow((1-er.accuracy)*(er.accuracy),(double).5);
+			double acc=0;
+			double acc2=0;
+			double probSum = 0;
 			for (int j=0;j<nrowsTraining;j++){
-				//cout<<"a: "<<a<<", response: "<<responses[j]<<", hypothesis: "<<(er.hypothesisData[j].prediction*er.sign)<<endl;
-				dist[j]=dist[j]*exp(-a*responses[j]*er.hypothesisData[j].prediction*er.sign);
+				int thisH = (2*(predictors[j][er.index]<=er.threshold)-1)*er.sign;
+				if (thisH==responses[j])
+					acc+=er.hypothesisData[j].dist;
+				if (er.hypothesisData[j].prediction!=er.hypothesisData[j].response)
+					acc2+=er.hypothesisData[j].dist;
+				//cout<<"dist: "<<dist[j]<<", index: "<<er.hypothesisData[j].index<<endl;
+				//cout<<"a: "<<a<<", response: "<<responses[j]<<", response2: "<<er.hypothesisData[j].response<<", hypothesis: "<<(er.hypothesisData[j].prediction*er.sign)<<", hypothesis 2: "<<thisH<<endl;
+				dist[j]=dist[j]*exp(-a*responses[j]*er.hypothesisData[j].prediction*er.sign)/Z;
+				probSum+=dist[j];
 			}
+			//cout<<"real accuracy: "<<acc<<", acc2: "<<acc2 <<", probSum: "<<probSum<<endl;
 			model.push_back(er);
 		}
 		return(model);
 	};
 
-	int* testBoost(vector<EvalResult> model){
+	vector<int> testBoost(vector<EvalResult> model){
+		//cout<<"model size: "<<model.size()<<endl;
 		int nrowsTesting = responses.size();
-		//test
-		int g[nrowsTesting];
+		//cout<<"nrowsTesting: "<<nrowsTesting<<endl;
+		vector<double> g;
+		vector<int> intG;
+		for (int i=0;i<nrowsTesting;i++)
+			g.push_back(0);
 		for (int i=0;i<model.size();i++){
 			double a = .5*log((model[i].accuracy)/(1-model[i].accuracy));
+			//cout<<"a: "<<a<<endl;
 			for (int j=0; j<nrowsTesting;j++){
 				int thisH;				
 				thisH = (2*(predictors[j][model[i].index]<=model[i].threshold)-1)*model[i].sign;
+				
 				g[j]+=thisH*a;
+				
 			}
 		}
 		for (int i=0;i<nrowsTesting;i++){
 			if (g[i]>0)
-				g[i]=1;
+				intG.push_back(1);
 			else
-				g[i]=-1;
+				intG.push_back(-1);
 		}
-		return(g);
+		return(intG);
 	};
 
 	EvalResult getStumps(double* dist){
@@ -105,7 +123,7 @@ public:
 			sum+= dist[i];
 		}
 		if (sum!=1){
-			cout<<"probabilities do not sum to 1! "<<sum<<endl;
+			//cout<<"probabilities do not sum to 1! "<<sum<<endl;
 			//exit(1);
 		}
 		int bestTotalIndex;
@@ -159,15 +177,7 @@ public:
 				else{
 				accuracy-=responsePredictor[j].dist;
 				}
-				double accuracy2 = 0;
-				for (int k=0;k<nrow;k++){
-					//cout<<"accuracy: "<<accuracy2<<", response: "<<responsePredictor[k].response<<", prediction: "<<responsePredictor[k].prediction<<endl; 
-
-					if (responsePredictor[k].response ==responsePredictor[k].prediction)
-						accuracy2+=responsePredictor[k].dist;
-				}
 				
-				//cout<<"accuracy: "<<accuracy<<", accuracy2: "<<accuracy2<<endl;
 
 				int sign=-1;
 				if (accuracy>.5)
@@ -280,31 +290,30 @@ public:
 
 	};
 
-	int* crossValidate(int T, int nFolds){
+	vector<int> crossValidate(int T, int nFolds){
 		int nrows = responses.size();
-		double gTest[nrows];
+		vector<int> gTest;
 		for (int i=0;i<nrows;i++){
-			gTest[i]=-1;
+			gTest.push_back(-1);
 		}
 		this->createFolds(nFolds);
 		for (int l=0;l<nFolds;l++){ //do cross-validation
 			cout<<"fold: "<<l<<endl;
 			//cout<<"training ind size: "<<training.trainingInd[l].size()<<endl;
-			//cout<<"training.size: "<<training.responses.size()<<endl;
+			//cout<<"training.size: "<<trainingInd[l].size()<<", testing size: "<<testingInd[l].size()<<endl;
 			DataSet trainingSet(trainingInd[l],this);
 			DataSet testingSet(testingInd[l],this);
 			int nrowsTraining = trainingSet.responses.size();
-			
-			double g[nrowsTraining];
-						
+									
 			vector<EvalResult> model =trainingSet.trainBoost(T);
-			
-			int* gTemp =testingSet.testBoost(model);
+			//cout<<"model size: "<<model.size()<<endl;
+			vector<int> gTemp =testingSet.testBoost(model);
 			for (int i=0;i<testingInd[l].size();i++){
 				gTest[testingInd[l][i]] = gTemp[i];
 			}
 
 		}
+		return(gTest);
 
 		};
 };

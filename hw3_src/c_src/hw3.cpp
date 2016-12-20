@@ -26,8 +26,7 @@ int main(int argc, char* argv[]){
 	int nrowsTraining;	
 	int nrowsTesting;
 	
-	for (int k=7;k<8xy
-;k++){//iterate over T parameters
+	for (int k=8;k<9;k++){//iterate over T parameters
 		T = pow(3,k);
 		
 
